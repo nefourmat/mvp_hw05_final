@@ -77,12 +77,13 @@ class Follow(models.Model):
                                related_name='following',
                                verbose_name='Автор')
     user = models.ForeignKey(User,
-                               on_delete=models.CASCADE,
-                               related_name='follower',
-                               verbose_name='Подписчик')
-    
+                             on_delete=models.CASCADE,
+                             related_name='follower',
+                             verbose_name='Подписчик')
+
     class Meta:
         """Ограничение на подписку"""
         constraints = [
-            models.UniqueConstraint(fields=['author','user'],  name="unique_followers")
+            models.UniqueConstraint(fields=['author', 'user'],
+                                    name="unique_followers")
         ]
