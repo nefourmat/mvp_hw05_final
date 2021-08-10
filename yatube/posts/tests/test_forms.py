@@ -155,6 +155,6 @@ class PostCreateForm(TestCase):
             data=form_data,
             follow=True)
         self.assertRedirects(response, HOMEPAGE_URL)
-        self.assertEqual(Post.objects.count(), posts_count+1)
+        self.assertEqual(Post.objects.count(), posts_count + 1)
         self.assertTrue(
             Post.objects.filter(text=FORM_TEXT, image='posts/small.gif'))
