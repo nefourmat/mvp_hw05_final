@@ -1,11 +1,17 @@
-from django.test import Client, TestCase
-from django.urls import reverse
-from django.core.cache import cache
+import shutil
+import tempfile
 
-from posts.models import Group, Post, User
+from django.conf import settings
+from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client, TestCase, override_settings
+from django.urls import reverse
+
+from posts.models import Group, Post, User, Follow
 from posts.settings import PAGINATOR_COUNT
 
 TEST_USERNAME = 'mike'
+TEST_USERNAME_2 = 'jackson'
 TEST_TEXT = 'test-text'
 TEST_SLUG = 'test-slug'
 TEST_TITLE = 'test-title'
@@ -18,14 +24,28 @@ GROUP_POST_URL = reverse('group_posts', kwargs={'slug': TEST_SLUG})
 PROFILE_URL = reverse('profile', kwargs={'username': TEST_USERNAME})
 GROUP_URL = reverse('group_posts', kwargs={'slug': TEST_SLUG})
 ANOTHER_URL = reverse('group_posts', kwargs={'slug': TEST_SLUG_2})
+FOLLOW_INDEX = reverse('follow_index')
 REMAINDER = 1
+TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
+PICTURE = (b'\x47\x49\x46\x38\x39\x61\x02\x00'
+           b'\x01\x00\x80\x00\x00\x00\x00\x00'
+           b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
+           b'\x00\x00\x00\x2C\x00\x00\x00\x00'
+           b'\x02\x00\x01\x00\x00\x02\x02\x0C'
+           b'\x0A\x00\x3B')
+UPLOADED = SimpleUploadedFile(
+           name='small.gif',
+           content=PICTURE,
+           content_type='image/gif')
 
 
+@override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
 class ViewsTests(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         cls.user = User.objects.create_user(TEST_USERNAME)
+        cls.user_2 = User.objects.create_user(TEST_USERNAME_2)
         cls.group = Group.objects.create(
             title=TEST_TITLE,
             slug=TEST_SLUG,
@@ -37,29 +57,36 @@ class ViewsTests(TestCase):
         cls.post = Post.objects.create(
             text=TEST_TEXT,
             group=cls.group,
-            author=cls.user)
+            author=cls.user,
+            image=UPLOADED)
+        cls.follow = Follow.objects.get_or_create(
+            author=cls.user,
+            user=cls.user_2).count()
         cls.POST_URL = reverse('post', kwargs={
             'username': cls.user.username,
             'post_id': cls.post.id})
+        cls.guest_client = Client()
+        cls.authorized_client = Client()
+        cls.authorized_client.force_login(cls.user)
 
-    def setUp(self):
-        """Создаем пользователя"""
-        self.guest_client = Client()
-        self.authorized_client = Client()
-        self.authorized_client.force_login(self.user)
+    @classmethod
+    def tearDownClass(cls):
+        # Метод shutil.rmtree удаляет директорию и всё её содержимое
+        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        super().tearDownClass()
 
     def test_context(self):
         """Проверка контекста"""
-        cache.clear()
         urls = {
             HOMEPAGE_URL: 'page',
             GROUP_URL: 'page',
             PROFILE_URL: 'page',
-            self.POST_URL: 'post'
+            self.POST_URL: 'post',
+            FOLLOW_INDEX: 'page',
         }
         for url, key in urls.items():
             with self.subTest(url=url):
-                response = self.guest_client.get(url)
+                response = self.authorized_client.get(url)
                 if key == 'post':
                     post = response.context[key]
                 else:
@@ -68,6 +95,7 @@ class ViewsTests(TestCase):
                 self.assertEqual(post.text, self.post.text)
                 self.assertEqual(post.author, self.post.author)
                 self.assertEqual(post.group, self.post.group)
+                self.assertEqual(post.image, self.post.image)
 
     def test_another_group(self):
         """Пост находиться в нужной группе"""

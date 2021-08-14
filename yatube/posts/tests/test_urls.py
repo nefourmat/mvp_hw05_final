@@ -14,7 +14,10 @@ NEW_POST_URL = reverse('new_post')
 PROFILE_URL = reverse('profile', kwargs={'username': TEST_USERNAME})
 GROUP_URL = reverse('group_posts', kwargs={'slug': TEST_SLUG})
 LOG = reverse('login') + '?next='
-WRONG = '/wrong/'
+FOLLOW_INDEX = reverse('follow_index')
+FOLLOW_URL = reverse('profile_follow', kwargs={'username': TEST_USERNAME})
+UNFOLLOW_URL = reverse('profile_unfollow', kwargs={'username': TEST_USERNAME})
+WRONG = '/@/'
 
 
 class URLTests(TestCase):
@@ -36,16 +39,13 @@ class URLTests(TestCase):
         cls.POST_URL = reverse('post', kwargs={
             'username': cls.user.username,
             'post_id': cls.post.id})
-
-    def setUp(self):
-        """Создаем пользователя"""
-        self.guest_client = Client()
         # тут авторизованый автор
-        self.authorized_client = Client()
-        self.authorized_client.force_login(self.user)
+        cls.guest_client = Client()
+        cls.authorized_client = Client()
+        cls.authorized_client.force_login(cls.user)
         # авторизованный юзер
-        self.authorized_client_2 = Client()
-        self.authorized_client_2.force_login(self.user_2)
+        cls.authorized_client_2 = Client()
+        cls.authorized_client_2.force_login(cls.user_2)
 
     def test_url_status(self):
         urls = [
@@ -58,7 +58,10 @@ class URLTests(TestCase):
             [self.POST_EDIT_URL, self.guest_client, 302],
             [GROUP_URL, self.guest_client, 200],
             [self.POST_EDIT_URL, self.authorized_client_2, 302],
-            [WRONG, self.guest_client, 404]
+            [WRONG, self.guest_client, 404],
+            [FOLLOW_INDEX, self.authorized_client_2, 200],
+            [FOLLOW_URL, self.authorized_client_2, 302],
+            [UNFOLLOW_URL, self.authorized_client_2, 302]
         ]
         for adress, client, httpstatus in urls:
             with self.subTest(adress=adress, client=client):
@@ -71,7 +74,8 @@ class URLTests(TestCase):
             [NEW_POST_URL, self.authorized_client, 'new_post.html'],
             [self.POST_EDIT_URL, self.authorized_client, 'new_post.html'],
             [self.POST_URL, self.guest_client, 'post.html'],
-            [PROFILE_URL, self.guest_client, 'profile.html']
+            [PROFILE_URL, self.guest_client, 'profile.html'],
+            [FOLLOW_INDEX, self.authorized_client_2, 'follow.html']
         ]
         for adress, client, template in templates_url_names:
             with self.subTest(adress=adress):
@@ -81,7 +85,8 @@ class URLTests(TestCase):
         redirect = [
             [NEW_POST_URL, LOG + NEW_POST_URL, self.guest_client],
             [self.POST_EDIT_URL, LOG + self.POST_EDIT_URL, self.guest_client],
-            [self.POST_EDIT_URL, self.POST_URL, self.authorized_client_2]
+            [self.POST_EDIT_URL, self.POST_URL, self.authorized_client_2],
+            [FOLLOW_URL, FOLLOW_INDEX, self.authorized_client_2]
         ]
         for adress, redirection, client in redirect:
             with self.subTest(adress=adress, client=client,

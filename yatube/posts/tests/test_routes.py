@@ -20,12 +20,16 @@ class RoutesTest(TestCase):
         route_names = [
             ['index', [], '/'],
             ['new_post', [], '/new/'],
+            ['follow_index', [], '/follow/'],
             ['group_posts', [TEST_SLUG], f'/group/{TEST_SLUG}/'],
             ['profile', [TEST_USERNAME], f'/{TEST_USERNAME}/'],
             ['post', [TEST_USERNAME, self.post.id],
-                f'/{TEST_USERNAME}/{self.post.id}/'],
+             f'/{TEST_USERNAME}/{self.post.id}/'],
             ['post_edit', [TEST_USERNAME, self.post.id],
-                f'/{TEST_USERNAME}/{self.post.id}/edit/']
+             f'/{TEST_USERNAME}/{self.post.id}/edit/'],
+            ['profile_follow', [TEST_USERNAME], f'/{TEST_USERNAME}/follow/'],
+            ['profile_unfollow', [TEST_USERNAME],
+             f'/{TEST_USERNAME}/unfollow/']
         ]
         for name, parameters, url in route_names:
             self.assertEqual(reverse(name, args=parameters), url)
