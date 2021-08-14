@@ -7,7 +7,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from posts.models import Group, Post, User, Follow
+from posts.models import Group, Post, User
 from posts.settings import PAGINATOR_COUNT
 
 TEST_USERNAME = 'mike'
@@ -25,6 +25,8 @@ PROFILE_URL = reverse('profile', kwargs={'username': TEST_USERNAME})
 GROUP_URL = reverse('group_posts', kwargs={'slug': TEST_SLUG})
 ANOTHER_URL = reverse('group_posts', kwargs={'slug': TEST_SLUG_2})
 FOLLOW_INDEX = reverse('follow_index')
+PROFILE_FOLLOW = reverse(
+    'profile_follow', kwargs={'username': TEST_USERNAME})
 REMAINDER = 1
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 PICTURE = (b'\x47\x49\x46\x38\x39\x61\x02\x00'
@@ -57,15 +59,15 @@ class ViewsTests(TestCase):
             group=cls.group,
             author=cls.user,
             image=UPLOADED)
-        cls.follow = Follow.objects.get_or_create(
-            author=cls.user,
-            user=cls.user_2).count()
         cls.POST_URL = reverse('post', kwargs={
             'username': cls.user.username,
             'post_id': cls.post.id})
         cls.guest_client = Client()
         cls.authorized_client = Client()
         cls.authorized_client.force_login(cls.user)
+        #  второй клиент
+        cls.authorized_client_2 = Client()
+        cls.authorized_client_2.force_login(cls.user_2)
 
     @classmethod
     def tearDownClass(cls):
@@ -80,11 +82,10 @@ class ViewsTests(TestCase):
             GROUP_URL: 'page',
             PROFILE_URL: 'page',
             self.POST_URL: 'post',
-            FOLLOW_INDEX: 'page',
         }
         for url, key in urls.items():
             with self.subTest(url=url):
-                response = self.authorized_client.get(url)
+                response = self.authorized_client_2.get(url)
                 if key == 'post':
                     post = response.context[key]
                 else:
@@ -94,6 +95,15 @@ class ViewsTests(TestCase):
                 self.assertEqual(post.author, self.post.author)
                 self.assertEqual(post.group, self.post.group)
                 self.assertEqual(post.image, self.post.image)
+
+    def test_follow(self):
+        response_1 = self.authorized_client_2.get(FOLLOW_INDEX)
+        page_object_1 = response_1.context['page'].object_list
+        self.assertEqual(len(page_object_1), 0)
+        self.authorized_client_2.get(PROFILE_FOLLOW)
+        response_2 = self.authorized_client_2.get(FOLLOW_INDEX)
+        page_object_2 = response_2.context['page'].object_list
+        self.assertEqual(len(page_object_2), 1)
 
     def test_another_group(self):
         """Пост находиться в нужной группе"""
