@@ -7,12 +7,14 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from posts.models import Group, Post, User
+from posts.models import Group, Post, User, Follow
 from posts.settings import PAGINATOR_COUNT
 
 TEST_USERNAME = 'mike'
 TEST_USERNAME_2 = 'jackson'
+TEST_USERNAME_3 = 'arnold'
 TEST_TEXT = 'test-text'
+CASH_TEXT = 'проверяем кэш'
 TEST_SLUG = 'test-slug'
 TEST_TITLE = 'test-title'
 TEST_TITLE_2 = 'test-another'
@@ -27,6 +29,9 @@ ANOTHER_URL = reverse('group_posts', kwargs={'slug': TEST_SLUG_2})
 FOLLOW_INDEX = reverse('follow_index')
 PROFILE_FOLLOW = reverse(
     'profile_follow', kwargs={'username': TEST_USERNAME})
+PROFILE_UNFOLLOW = reverse(
+    'profile_unfollow', kwargs={'username': TEST_USERNAME})
+NEW_POST_URL = reverse('new_post')
 REMAINDER = 1
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 PICTURE = (b'\x47\x49\x46\x38\x39\x61\x02\x00'
@@ -46,6 +51,7 @@ class ViewsTests(TestCase):
         super().setUpClass()
         cls.user = User.objects.create_user(TEST_USERNAME)
         cls.user_2 = User.objects.create_user(TEST_USERNAME_2)
+        cls.user_3 = User.objects.create_user(TEST_USERNAME_3)
         cls.group = Group.objects.create(
             title=TEST_TITLE,
             slug=TEST_SLUG,
@@ -68,6 +74,9 @@ class ViewsTests(TestCase):
         #  второй клиент
         cls.authorized_client_2 = Client()
         cls.authorized_client_2.force_login(cls.user_2)
+        #  фолловер
+        cls.authorized_follower = Client()
+        cls.authorized_follower.force_login(cls.user_3)
 
     @classmethod
     def tearDownClass(cls):
@@ -99,31 +108,65 @@ class ViewsTests(TestCase):
     def test_follow(self):
         response_1 = self.authorized_client_2.get(FOLLOW_INDEX)
         page_object_1 = response_1.context['page'].object_list
-        self.assertEqual(len(page_object_1), 0)
+        self.assertEqual(len(page_object_1), 0)  # исправить
         self.authorized_client_2.get(PROFILE_FOLLOW)
-        response_2 = self.authorized_client_2.get(FOLLOW_INDEX)
-        page_object_2 = response_2.context['page'].object_list
-        self.assertEqual(len(page_object_2), 1)
+        follows = Follow.objects.filter(
+            user=self.user_2, author=self.user).count()
+        self.assertEqual(follows, 1)
+        self.authorized_client_2.get(PROFILE_UNFOLLOW)
+        follows = Follow.objects.filter(
+            user=self.user_2, author=self.user).count()
+        self.assertNotEqual(follows, 1)
 
     def test_another_group(self):
-        """Пост находиться в нужной группе"""
         response = self.authorized_client.get(ANOTHER_URL)
         self.assertNotIn(self.post, response.context['page'])
 
-    def test_context_profile(self):
-        """Пост находиться в профиле"""
-        response = self.authorized_client.get(PROFILE_URL)
-        context_group = response.context['author']
-        self.assertEqual(self.user.username, context_group.username)
+    def test_context_group_author(self):
+        urls = {
+            PROFILE_URL: 'author',
+            GROUP_URL: 'group'
+        }
+        for url, key in urls.items():
+            with self.subTest(url=url):
+                response = self.authorized_client.get(url)
+                context = response.context[key]
+                if key == 'author':
+                    self.assertEqual(self.user.username, context.username)
+                else:
+                    self.assertEqual(self.group.title, context.title)
+                    self.assertEqual(self.group.slug, context.slug)
+                    self.assertEqual(self.group.description,
+                                     context.description)
 
-    def test_context_group(self):
-        """Пост в нужной группе"""
-        response = self.authorized_client.get(GROUP_URL)
-        context_group = response.context['group']
-        self.assertEqual(self.group.title, context_group.title)
-        self.assertEqual(self.group.slug, context_group.slug)
-        self.assertEqual(self.group.description,
-                         context_group.description)
+    def test_new_post_check_at_followers(self):
+        self.authorized_follower.get(PROFILE_FOLLOW)
+        form_data = {
+            'text': TEST_TEXT,
+            'author': self.user,
+        }
+        self.authorized_client.post(
+            NEW_POST_URL,
+            data=form_data,
+            follow=True
+        )
+        response = self.authorized_follower.get(FOLLOW_INDEX)
+        self.assertContains(response, form_data['text'])
+        response = self.authorized_client_2.get(FOLLOW_INDEX)
+        self.assertNotContains(response, form_data['text'])
+
+    def test_index_cache_check(self):
+        response = self.authorized_client.get(HOMEPAGE_URL)
+        post = Post.objects.create(
+            text=CASH_TEXT,
+            author=self.user
+        )
+        page = response.content
+        self.assertEqual(page, response.content)
+        post.delete()
+        response = self.client.get(HOMEPAGE_URL)
+        cache.clear()
+        self.assertNotEqual(response, response.content)
 
 
 class PaginatorViewsTest(TestCase):

@@ -7,7 +7,7 @@ from django import forms
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
-from posts.models import Group, Post, User
+from posts.models import Group, Post, User, Comment
 
 HOMEPAGE_URL = reverse('index')
 NEW_POST_URL = reverse('new_post')
@@ -15,6 +15,7 @@ LOGIN_URL = reverse('login') + '?next='
 TEST_USERNAME = 'mike'
 POST_TEXT = 'Проверка создание поста'
 FORM_TEXT = 'Текст из формы'
+COMMENT_TEXT = 'коммент'
 NOT_AUTH_USER = 'пользователь не авторизован'
 TEST_TITLE = 'test-title'
 TEST_SLUG = 'test-slug'
@@ -53,6 +54,9 @@ class PostCreateForm(TestCase):
         cls.POST_URL = reverse('post', kwargs={
             'username': cls.user.username,
             'post_id': cls.post.id})
+        cls.COMMENT_URL = reverse('add_comment', kwargs={
+            'username': cls.user.username,
+            'post_id': cls.post.id})
         cls.guest_client = Client()
         cls.authorized_client = Client()
         cls.authorized_client.force_login(cls.user)
@@ -66,7 +70,6 @@ class PostCreateForm(TestCase):
     def test_new_post_no_auth(self):
         """Попытка создания поста не автор-ым пользователем"""
         keys_posts = set(Post.objects.values_list('id'))
-        posts_count = Post.objects.count()
         form_data = {
             'text': FORM_TEXT,
             'author': self.user}
@@ -77,7 +80,6 @@ class PostCreateForm(TestCase):
         self.assertRedirects(
             response,
             (LOGIN_URL + NEW_POST_URL))
-        self.assertEqual(Post.objects.count(), posts_count)
         self.assertEqual(set(Post.objects.values_list('id')), keys_posts)
 
     def test_create_post(self):
@@ -87,23 +89,21 @@ class PostCreateForm(TestCase):
         form_data = {
             'text': FORM_TEXT,
             'group': self.gpoup.id,
-            'picture': self.post.image}
+            'image': self.post.image}
         response = self.authorized_client.post(
             NEW_POST_URL,
             data=form_data,
             follow=True)
         refresh_values = set(post.pk for post in Post.objects.all())
-        remains = list(refresh_values - old_values)
-        post = response.context['page'][0]
-        self.assertEqual(len(remains), 1)
         self.assertRedirects(response, HOMEPAGE_URL)
+        remains = list(refresh_values - old_values)
+        post = response.context['page'].object_list[0]
+        self.assertEqual(len(remains), 1)
         self.assertEqual(len(response.context['page']), posts_count + 1)
         self.assertEqual(post.text, form_data['text'])
         self.assertEqual(post.author, self.user)
         self.assertEqual(post.group.id, form_data['group'])
-        self.assertTrue(
-            Post.objects.filter(image=form_data['picture'], text=POST_TEXT))
-        #  self.assertEqual(post.image, form_data['picture'])
+        self.assertEqual(self.post.image, form_data['image'].name)
 
     def test_context(self):
         """Правильный контекст для post_edit/new_post"""
@@ -137,6 +137,42 @@ class PostCreateForm(TestCase):
         self.assertEqual(post_to_edit.id, self.post.id)
         self.assertEqual(post_to_edit.text, form_data['text'])
         self.assertEqual(post_to_edit.group.id, form_data['group'])
-        self.assertEqual(post_to_edit.author, self.user)
-        self.assertTrue(
-            Post.objects.filter(image=form_data['picture'], text=FORM_TEXT))
+        self.assertEqual(post_to_edit.author, self.post.author)
+        self.assertEqual(str(response.context['post']), form_data['text'])
+
+    def test_create_new_comment(self):
+        """Комментарий"""
+        comment_count = Comment.objects.count()
+        form_data = {
+            "text": COMMENT_TEXT,
+        }
+        response = self.authorized_client.post(
+            self.COMMENT_URL,
+            data=form_data,
+            follow=True,
+        )
+        self.assertRedirects(response, self.POST_URL)
+        self.assertEqual(Comment.objects.count(), comment_count + 1)
+        self.assertEqual(len(response.context['comments']), 1)
+        added_comment = response.context['comments'][0]
+        self.assertEqual(added_comment.post, self.post)
+        self.assertEqual(added_comment.author, self.user)
+        self.assertEqual(added_comment.text, form_data['text'])
+
+    def test_update_post_guest(self):
+        """Редактирование гостем """
+        post_before_edit = Post.objects.get(
+            id=self.post.id,
+            author__username=self.user)
+        form_data = {
+            'text': FORM_TEXT,
+            'group': self.gpoup.id,
+            'picture': self.post.image}
+        response = self.guest_client.post(
+            self.POST_EDIT_URL,
+            data=form_data,
+            follow=True)
+        self.assertRedirects(response, LOGIN_URL + self.POST_EDIT_URL)
+        self.assertEqual(
+            post_before_edit,
+            Post.objects.get(id=self.post.id, author__username=self.user))

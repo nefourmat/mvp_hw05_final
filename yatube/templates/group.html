@@ -6,10 +6,10 @@
 {% block content %} 
 
   <p> {{ group.description|linebreaksbr }} </p> 
-  {% for post in posts %} 
-    {% include "post_item.html" with group=group group=True %}
+  {% for post in page %} 
+    {% include "post_item.html" with show_group=True %}
   {% endfor %} 
 
   <!-- Вывод паджинатора -->
-  {% include "paginator.html" with items=page paginator=paginator%}
+  {% include "paginator.html" with items=page %}
 {% endblock %} 

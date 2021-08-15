@@ -27,8 +27,8 @@
               href="{% url 'profile_follow' author.username %}" role="button">
               Подписаться
             </a>
+            {% endif %}
           {% endif %}
-        {% endif %}
           <div class="h6 text-muted">
             Подписчиков: {{ author.following.count }} <br>
             Подписан: {{ author.follower.count }}

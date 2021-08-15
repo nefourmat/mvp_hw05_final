@@ -13,35 +13,31 @@
           <strong class="d-block text-gray-dark">@{{ post.author }}</strong>
         </a>
         <q 
-            class="card-body__quote" 
-            style="font-style: italic;
-                   color: rgb(65, 65, 65);"
+          class="card-body__quote" 
+          style="font-style: italic;
+                  color: rgb(65, 65, 65);"
           >
-            {{post.text|linebreaksbr}}
-          </q>
+          {{post.text|linebreaksbr}}
+        </q>
       </p>
   
       <!-- Если пост относится к какому-нибудь сообществу, то отобразим ссылку на него через # -->
-      {% if group == True %}
-      {% else %}
-      {% if post.group %}
+      {% if post.group and not show_group %}
         <a class="card-link muted" href="{% url 'group_posts' post.group.slug %}">
           <strong class="d-block text-gray-dark">#{{ post.group.title }}</strong>
         </a>
       {% endif %}
-      {% endif %}
       <!-- Отображение ссылки на комментарии -->
       <div class="d-flex justify-content-between align-items-center">
         <div class="btn-group">
-          {% if post.comments.exists %}
+          {% if post.comments.exists and request.user.is_authenticated %}
             <div>
               Комментариев: {{ post.comments.count }}
             </div>
-          {% endif %}
           <a class="btn btn-sm btn-primary" href="{% url 'add_comment' post.author.username post.id %}" role="button">
             Добавить комментарий
           </a>
-  
+          {% endif %}
           <!-- Ссылка на редактирование поста для автора -->
           {% if user == post.author %}
             <a class="btn btn-sm btn-info" href="{% url 'post_edit' post.author.username post.id %}" role="button">

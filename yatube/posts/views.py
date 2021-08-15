@@ -7,22 +7,21 @@ from .models import Follow, Group, Post, User
 from .settings import PAGINATOR_COUNT
 
 
-def paginator_view(request, post_list):
+def page_view(request, post_list):
     paginator = Paginator(post_list, PAGINATOR_COUNT)
     page_number = request.GET.get('page')
     return paginator.get_page(page_number)
 
 
 def index(request):
-    page = paginator_view(request, Post.objects.all())
+    page = page_view(request, Post.objects.all())
     return render(request, 'index.html', {'page': page})
 
 
 def group_posts(request, slug):
     group = get_object_or_404(Group, slug=slug)
-    posts = group.posts.all()
-    page = paginator_view(request, posts)
-    context = {'group': group, 'posts': posts, 'page': page}
+    page = page_view(request, group.posts.all())
+    context = {'group': group, 'page': page}
     return render(request, 'group.html', context)
 
 
@@ -36,19 +35,31 @@ def profile(request, username):
             author=author
         ).exists()
     )
-    post = author.posts.all()
-    page = paginator_view(request, post)
+    page = page_view(request, author.posts.all())
     context = {'author': author, 'page': page, 'following': following}
     return render(request, 'profile.html', context)
 
 
 def post_view(request, username, post_id):
-    author = get_object_or_404(User, username=username)
+    post = get_object_or_404(Post, id=post_id, author__username=username)
+    following = (
+        request.user.is_authenticated
+        and post.author != request.user
+        and Follow.objects.filter(
+            user=request.user,
+            author=post.author
+        ).exists()
+    )
     post = get_object_or_404(Post, id=post_id, author__username=username)
     comments = post.comments.all()
     form = CommentForm(request.POST or None)
     context = {
-        'post': post, 'form': form, 'comments': comments, 'author': author}
+        'post': post,
+        'form': form,
+        'comments': comments,
+        'author': post.author,
+        'following': following
+        }
     return render(request, 'post.html', context)
 
 
@@ -101,16 +112,15 @@ def add_comment(request, username, post_id):
         comments.author = request.user
         comments.save()
         return redirect('post', username, post_id)
-    return render(request, "post.html", {'form': form, 'post': post})
+    return redirect('post', username, post_id)
 
 
 @login_required
 def follow_index(request):
     """Посты авторов, на которых подписан текущий пользователь"""
-    user = request.user
-    post_list = Post.objects.filter(author__following__user=request.user)
-    page = paginator_view(request, post_list)
-    context = {'post_list': post_list, 'page': page, 'user': user}
+    page = page_view(
+        request, Post.objects.filter(author__following__user=request.user))
+    context = {'page': page, 'user': request.user}
     return render(request, "follow.html", context)
 
 
