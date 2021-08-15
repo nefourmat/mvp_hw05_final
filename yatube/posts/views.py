@@ -58,8 +58,7 @@ def post_view(request, username, post_id):
         'form': form,
         'comments': comments,
         'author': post.author,
-        'following': following
-              }
+        'following': following}
     return render(request, 'post.html', context)
 
 
