@@ -59,7 +59,7 @@ def post_view(request, username, post_id):
         'comments': comments,
         'author': post.author,
         'following': following
-        }
+              }
     return render(request, 'post.html', context)
 
 
