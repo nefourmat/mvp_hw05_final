@@ -1,6 +1,7 @@
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.cache import cache_page
 
 from .forms import CommentForm, PostForm
 from .models import Follow, Group, Post, User
@@ -13,6 +14,7 @@ def page_view(request, post_list):
     return paginator.get_page(page_number)
 
 
+@cache_page(20, key_prefix='index_page')
 def index(request):
     page = page_view(request, Post.objects.all())
     return render(request, 'index.html', {'page': page})
@@ -50,7 +52,6 @@ def post_view(request, username, post_id):
             author=post.author
         ).exists()
     )
-    post = get_object_or_404(Post, id=post_id, author__username=username)
     comments = post.comments.all()
     form = CommentForm(request.POST or None)
     context = {
@@ -111,7 +112,6 @@ def add_comment(request, username, post_id):
         comments.author = request.user
         comments.save()
         return redirect('post', username, post_id)
-    return redirect('post', username, post_id)
 
 
 @login_required
@@ -125,12 +125,11 @@ def follow_index(request):
 
 @login_required
 def profile_follow(request, username):
-    """Возможность подписаться"""
     if request.user.username != username:
         following_author = get_object_or_404(User, username=username)
         Follow.objects.get_or_create(
             user=request.user, author=following_author)
-    return redirect('follow_index')
+    return redirect('profile', username=username)
 
 
 @login_required

@@ -30,7 +30,7 @@ FOLLOW_INDEX = reverse('follow_index')
 PROFILE_FOLLOW = reverse(
     'profile_follow', kwargs={'username': TEST_USERNAME})
 PROFILE_UNFOLLOW = reverse(
-    'profile_unfollow', kwargs={'username': TEST_USERNAME})
+    'profile_unfollow', kwargs={'username': TEST_USERNAME_2})
 NEW_POST_URL = reverse('new_post')
 REMAINDER = 1
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
@@ -78,11 +78,19 @@ class ViewsTests(TestCase):
         cls.authorized_follower = Client()
         cls.authorized_follower.force_login(cls.user_3)
 
+        cls.follow = Follow.objects.create(
+            user=cls.user_2,
+            author=cls.user
+        )
+
     @classmethod
     def tearDownClass(cls):
         # Метод shutil.rmtree удаляет директорию и всё её содержимое
-        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
         super().tearDownClass()
+
+    def setUp(self):
+        cache.clear()
 
     def test_context(self):
         """Проверка контекста"""
@@ -91,6 +99,7 @@ class ViewsTests(TestCase):
             GROUP_URL: 'page',
             PROFILE_URL: 'page',
             self.POST_URL: 'post',
+            FOLLOW_INDEX: 'page'
         }
         for url, key in urls.items():
             with self.subTest(url=url):
@@ -104,19 +113,6 @@ class ViewsTests(TestCase):
                 self.assertEqual(post.author, self.post.author)
                 self.assertEqual(post.group, self.post.group)
                 self.assertEqual(post.image, self.post.image)
-
-    def test_follow(self):
-        response_1 = self.authorized_client_2.get(FOLLOW_INDEX)
-        page_object_1 = response_1.context['page'].object_list
-        self.assertEqual(len(page_object_1), 0)  # исправить
-        self.authorized_client_2.get(PROFILE_FOLLOW)
-        follows = Follow.objects.filter(
-            user=self.user_2, author=self.user).count()
-        self.assertEqual(follows, 1)
-        self.authorized_client_2.get(PROFILE_UNFOLLOW)
-        follows = Follow.objects.filter(
-            user=self.user_2, author=self.user).count()
-        self.assertNotEqual(follows, 1)
 
     def test_another_group(self):
         response = self.authorized_client.get(ANOTHER_URL)
@@ -139,34 +135,34 @@ class ViewsTests(TestCase):
                     self.assertEqual(self.group.description,
                                      context.description)
 
-    def test_new_post_check_at_followers(self):
-        self.authorized_follower.get(PROFILE_FOLLOW)
-        form_data = {
-            'text': TEST_TEXT,
-            'author': self.user,
-        }
-        self.authorized_client.post(
-            NEW_POST_URL,
-            data=form_data,
-            follow=True
-        )
-        response = self.authorized_follower.get(FOLLOW_INDEX)
-        self.assertContains(response, form_data['text'])
-        response = self.authorized_client_2.get(FOLLOW_INDEX)
-        self.assertNotContains(response, form_data['text'])
-
     def test_index_cache_check(self):
         response = self.authorized_client.get(HOMEPAGE_URL)
-        post = Post.objects.create(
+        Post.objects.create(
             text=CASH_TEXT,
             author=self.user
         )
-        page = response.content
-        self.assertEqual(page, response.content)
-        post.delete()
-        response = self.client.get(HOMEPAGE_URL)
+        response_2 = self.client.get(HOMEPAGE_URL)
+        self.assertEqual(response.content, response_2.content)
         cache.clear()
-        self.assertNotEqual(response, response.content)
+        response_3 = self.client.get(HOMEPAGE_URL)
+        self.assertNotEqual(response_2.content, response_3.content)
+
+    def test_follow(self):
+        self.authorized_client_2.get(PROFILE_FOLLOW)
+        self.assertTrue(Follow.objects.filter(
+            author=self.user,
+            user=self.user_2
+        ).exists())
+
+    def test_unfollow(self):
+        Follow.objects.create(
+            author=self.user_2,
+            user=self.user)
+        self.authorized_client.get(PROFILE_UNFOLLOW)
+        self.assertFalse(Follow.objects.filter(
+            author=self.user_2,
+            user=self.user
+        ).exists())
 
 
 class PaginatorViewsTest(TestCase):

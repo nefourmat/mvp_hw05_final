@@ -3,7 +3,6 @@
 {% block header %}Последние обновления на сайте{% endblock %}
 {% block content %}
   <div class="container">
-
     {% include "menu.html" with index=True %}
 
     {% for post in page %}
@@ -11,6 +10,5 @@
     {% endfor %}
 
     {% include "paginator.html" with items=page paginator=paginator %}
-
   </div>
 {% endblock %}

@@ -64,10 +64,10 @@ class PostCreateForm(TestCase):
     @classmethod
     def tearDownClass(cls):
         # Метод shutil.rmtree удаляет директорию и всё её содержимое
-        shutil.rmtree(settings.MEDIA_ROOT, ignore_errors=True)
+        shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
         super().tearDownClass()
 
-    def test_new_post_no_auth(self):
+    def test_unauth_user_cant_publish_pos(self):
         """Попытка создания поста не автор-ым пользователем"""
         keys_posts = set(Post.objects.values_list('id'))
         form_data = {
@@ -82,10 +82,8 @@ class PostCreateForm(TestCase):
             (LOGIN_URL + NEW_POST_URL))
         self.assertEqual(set(Post.objects.values_list('id')), keys_posts)
 
-    def test_create_post(self):
-        """Попытка создания поста автором"""
-        posts_count = Post.objects.count()
-        old_values = set(post.pk for post in Post.objects.all())
+    def test_auth_user_can_publish_post(self):
+        post_count = Post.objects.count()
         form_data = {
             'text': FORM_TEXT,
             'group': self.gpoup.id,
@@ -93,44 +91,52 @@ class PostCreateForm(TestCase):
         response = self.authorized_client.post(
             NEW_POST_URL,
             data=form_data,
-            follow=True)
-        refresh_values = set(post.pk for post in Post.objects.all())
+            follow=True,
+        )
+        self.assertEqual(response.status_code, 200)
         self.assertRedirects(response, HOMEPAGE_URL)
-        remains = list(refresh_values - old_values)
-        post = response.context['page'].object_list[0]
-        self.assertEqual(len(remains), 1)
-        self.assertEqual(len(response.context['page']), posts_count + 1)
-        self.assertEqual(post.text, form_data['text'])
-        self.assertEqual(post.author, self.user)
-        self.assertEqual(post.group.id, form_data['group'])
+        new_posts = [
+            post for post in response.context['page'] if post != self.post]
+        self.assertEqual(len(new_posts), 1)
+        new_post = new_posts[0]
+        self.assertEqual(Post.objects.count(), post_count + 1)
+        self.assertEqual(new_post.text, form_data['text'])
+        self.assertEqual(new_post.author, self.user)
+        self.assertEqual(new_post.group.id, form_data['group'])
         self.assertEqual(self.post.image, form_data['image'].name)
 
-    def test_context(self):
-        """Правильный контекст для post_edit/new_post"""
-        urls = NEW_POST_URL, self.POST_EDIT_URL
-        form_filed = {
-            'text': forms.fields.CharField,
-            'group': forms.fields.ChoiceField
-        }
-        for check_url in urls:
-            response = self.authorized_client.get(
-                check_url, data=form_filed, follow=True)
-            for name, form in form_filed.items():
-                with self.subTest(name=name, check_url=check_url):
-                    form_field = response.context['form'].fields[name]
-                    self.assertIsInstance(form_field, form)
+    def test_new_post(self):
+        """Шаблон редактирования/создания поста с нужным context"""
+        urls = [NEW_POST_URL, self.POST_EDIT_URL]
+        for url in urls:
+            with self.subTest(url=url):
+                response = self.authorized_client.get(url)
+                form_fields = {
+                    'text': forms.fields.CharField,
+                    'group': forms.fields.ChoiceField
+                }
+                for value, context_form_field in form_fields.items():
+                    with self.subTest(value=value, url=url):
+                        post_field = response.context['form'].fields[value]
+                        self.assertIsInstance(post_field, context_form_field)
 
     def test_edit_post(self):
         """Редактирование поста"""
+        # не получается работать с константой UPLOADED
+        # И меняем название картинки для редактирования
+        uploaded = SimpleUploadedFile(
+            name='small_edited.gif', content=PICTURE, content_type='image/gif')
         posts_count = Post.objects.count()
         form_data = {
             'text': FORM_TEXT,
             'group': self.gpoup.id,
-            'picture': self.post.image}
+            'image': uploaded,
+        }
         response = self.authorized_client.post(
             self.POST_EDIT_URL,
             data=form_data,
-            follow=True)
+            follow=True
+        )
         post_to_edit = response.context['post']
         self.assertRedirects(response, self.POST_URL)
         self.assertEqual(Post.objects.count(), posts_count)
@@ -138,7 +144,7 @@ class PostCreateForm(TestCase):
         self.assertEqual(post_to_edit.text, form_data['text'])
         self.assertEqual(post_to_edit.group.id, form_data['group'])
         self.assertEqual(post_to_edit.author, self.post.author)
-        self.assertEqual(str(response.context['post']), form_data['text'])
+        self.assertEqual(post_to_edit.image, 'posts/small_edited.gif')
 
     def test_create_new_comment(self):
         """Комментарий"""
@@ -161,18 +167,18 @@ class PostCreateForm(TestCase):
 
     def test_update_post_guest(self):
         """Редактирование гостем """
-        post_before_edit = Post.objects.get(
-            id=self.post.id,
-            author__username=self.user)
         form_data = {
             'text': FORM_TEXT,
             'group': self.gpoup.id,
-            'picture': self.post.image}
+            'picture': self.post.image
+        }
         response = self.guest_client.post(
             self.POST_EDIT_URL,
             data=form_data,
-            follow=True)
+            follow=True
+        )
         self.assertRedirects(response, LOGIN_URL + self.POST_EDIT_URL)
-        self.assertEqual(
-            post_before_edit,
-            Post.objects.get(id=self.post.id, author__username=self.user))
+        post = Post.objects.get(id=self.post.id)
+        self.assertEqual(post.text, self.post.text)
+        self.assertEqual(post.author, self.post.author)
+        self.assertEqual(post.group, self.post.group)
