@@ -29,6 +29,8 @@ PICTURE = (b'\x47\x49\x46\x38\x39\x61\x02\x00'
            b'\x0A\x00\x3B')
 UPLOADED = SimpleUploadedFile(
     name='small.gif', content=PICTURE, content_type='image/gif')
+IMAGE = 'small___.gif'
+IMAGE_EDIT = 'small_edited.gif'
 
 
 @override_settings(MEDIA_ROOT=TEMP_MEDIA_ROOT)
@@ -83,11 +85,13 @@ class PostCreateForm(TestCase):
         self.assertEqual(set(Post.objects.values_list('id')), keys_posts)
 
     def test_auth_user_can_publish_post(self):
+        uploaded = SimpleUploadedFile(
+            name=IMAGE, content=PICTURE, content_type='image/gif')
         post_count = Post.objects.count()
         form_data = {
             'text': FORM_TEXT,
             'group': self.gpoup.id,
-            'image': self.post.image}
+            'image': uploaded}
         response = self.authorized_client.post(
             NEW_POST_URL,
             data=form_data,
@@ -103,7 +107,7 @@ class PostCreateForm(TestCase):
         self.assertEqual(new_post.text, form_data['text'])
         self.assertEqual(new_post.author, self.user)
         self.assertEqual(new_post.group.id, form_data['group'])
-        self.assertEqual(self.post.image, form_data['image'].name)
+        self.assertEqual(new_post.image.name, f'posts/{IMAGE}')
 
     def test_new_post(self):
         """Шаблон редактирования/создания поста с нужным context"""
@@ -125,7 +129,7 @@ class PostCreateForm(TestCase):
         # не получается работать с константой UPLOADED
         # И меняем название картинки для редактирования
         uploaded = SimpleUploadedFile(
-            name='small_edited.gif', content=PICTURE, content_type='image/gif')
+            name=IMAGE_EDIT, content=PICTURE, content_type='image/gif')
         posts_count = Post.objects.count()
         form_data = {
             'text': FORM_TEXT,
@@ -144,7 +148,7 @@ class PostCreateForm(TestCase):
         self.assertEqual(post_to_edit.text, form_data['text'])
         self.assertEqual(post_to_edit.group.id, form_data['group'])
         self.assertEqual(post_to_edit.author, self.post.author)
-        self.assertEqual(post_to_edit.image, 'posts/small_edited.gif')
+        self.assertEqual(post_to_edit.image, f'posts/{IMAGE_EDIT}')
 
     def test_create_new_comment(self):
         """Комментарий"""

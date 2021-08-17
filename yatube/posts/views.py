@@ -112,6 +112,7 @@ def add_comment(request, username, post_id):
         comments.author = request.user
         comments.save()
         return redirect('post', username, post_id)
+    return render(request, 'post.html', {'post': post, 'form': form})
 
 
 @login_required
@@ -138,4 +139,4 @@ def profile_unfollow(request, username):
     unfollow = get_object_or_404(
         Follow, user=request.user, author__username=username)
     unfollow.delete()
-    return redirect('follow_index')
+    return redirect('profile', username=username)

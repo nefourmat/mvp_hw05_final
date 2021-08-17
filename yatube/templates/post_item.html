@@ -22,7 +22,7 @@
       </p>
   
       <!-- Если пост относится к какому-нибудь сообществу, то отобразим ссылку на него через # -->
-      {% if post.group and show_group %}
+      {% if post.group and not hide_group %}
         <a class="card-link muted" href="{% url 'group_posts' post.group.slug %}">
           <strong class="d-block text-gray-dark">#{{ post.group.title }}</strong>
         </a>
@@ -38,10 +38,13 @@
           <a class="btn btn-sm btn-primary" href="{% url 'post' post.author.username post.id %}" role="button">
              
             <!-- поправить верстку -->
-            {% if request.user.is_authenticated %} Добавить комментарий {% else %} Комментарии 
+            {% if request.user.is_authenticated %} 
+              Добавить комментарий 
+            {% else %} 
+              Комментарии 
+            {% endif %}
           </a> 
-          {% endif %}
-          <!-- Ссылка на редактирование поста для автора -->
+            <!-- Ссылка на редактирование поста для автора -->
           {% if user == post.author %}
             <a class="btn btn-sm btn-info" href="{% url 'post_edit' post.author.username post.id %}" role="button">
               Редактировать

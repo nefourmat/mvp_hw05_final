@@ -1,3 +1,5 @@
+import uuid
+
 from django.core.cache import cache
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -18,6 +20,7 @@ LOG = reverse('login') + '?next='
 FOLLOW_INDEX = reverse('follow_index')
 FOLLOW_URL = reverse('profile_follow', kwargs={'username': TEST_USERNAME})
 UNFOLLOW_URL = reverse('profile_unfollow', kwargs={'username': TEST_USERNAME})
+WRONG_URL = uuid.uuid4()
 
 
 class URLTests(TestCase):
@@ -39,9 +42,6 @@ class URLTests(TestCase):
         cls.POST_URL = reverse('post', kwargs={
             'username': cls.user.username,
             'post_id': cls.post.id})
-        cls.WRONG_URL = reverse('post', kwargs={
-            'username': cls.user.username,
-            'post_id': 0})
         # тут авторизованый автор
         cls.guest_client = Client()
         cls.authorized_client = Client()
@@ -64,7 +64,7 @@ class URLTests(TestCase):
             [self.POST_EDIT_URL, self.guest_client, 302],
             [GROUP_URL, self.guest_client, 200],
             [self.POST_EDIT_URL, self.authorized_client_2, 302],
-            [self.WRONG_URL, self.guest_client, 404],
+            [f'/{WRONG_URL}/', self.guest_client, 404],
             [FOLLOW_INDEX, self.authorized_client_2, 200],
             [FOLLOW_INDEX, self.guest_client, 302],
             [FOLLOW_URL, self.authorized_client_2, 302],
@@ -97,7 +97,7 @@ class URLTests(TestCase):
             [self.POST_EDIT_URL, self.POST_URL, self.authorized_client_2],
             [FOLLOW_URL, PROFILE_URL, self.authorized_client_2],
             [FOLLOW_URL, LOG + FOLLOW_URL, self.guest_client],
-            [UNFOLLOW_URL, FOLLOW_INDEX, self.authorized_client_2],
+            [UNFOLLOW_URL, PROFILE_URL, self.authorized_client_2],
             [UNFOLLOW_URL, LOG + UNFOLLOW_URL, self.guest_client],
             [FOLLOW_INDEX, LOG + FOLLOW_INDEX, self.guest_client]
         ]

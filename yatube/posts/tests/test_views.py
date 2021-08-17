@@ -155,9 +155,7 @@ class ViewsTests(TestCase):
         ).exists())
 
     def test_unfollow(self):
-        Follow.objects.create(
-            author=self.user_2,
-            user=self.user)
+        self.follow
         self.authorized_client.get(PROFILE_UNFOLLOW)
         self.assertFalse(Follow.objects.filter(
             author=self.user_2,

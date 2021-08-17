@@ -7,7 +7,7 @@
 
   <p> {{ group.description|linebreaksbr }} </p> 
   {% for post in page %} 
-    {% include "post_item.html" with show_group=False %}
+    {% include "post_item.html" with hide_group=True %}
   {% endfor %} 
 
   <!-- Вывод паджинатора -->
